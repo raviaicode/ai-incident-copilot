@@ -4,7 +4,7 @@ AI Incident Copilot is a portfolio-grade incident investigation platform for a r
 
 The project is intentionally built in phases. Each phase must produce working, testable software and strengthen one polished demo instead of adding disconnected technologies.
 
-> **Current status:** Phase 1 foundation implemented; unit verification is available with `mvn test`.
+> **Current status:** Phase 2 observability implemented on top of the tested Phase 1 workflow.
 
 ## The demo we are building toward
 
@@ -212,6 +212,48 @@ Run the infrastructure-independent test suite with `mvn test`.
 
 Later phases are intentionally described at milestone level until the preceding phase is working. Each phase will receive its own reviewed implementation plan.
 
+## Phase 2 implementation plan: observable workflow
+
+Phase 2 makes the existing order workflow diagnosable without changing its business behavior:
+
+1. **Service instrumentation — complete**
+   - Expose health and Prometheus actuator endpoints from all four services.
+   - Add Micrometer tracing with the OpenTelemetry bridge and OTLP exporter.
+   - Enable Spring Kafka producer and listener observations.
+2. **Context-rich logging — complete**
+   - Emit ECS-compatible structured JSON logs to stdout and shared log files.
+   - Add tenant and correlation identifiers to HTTP and Kafka processing logs.
+   - Return the correlation ID on synchronous HTTP responses.
+3. **Metrics pipeline — complete**
+   - Scrape service HTTP, Kafka, JVM, database-pool, and process metrics with Prometheus.
+   - Apply the service name as the common `application` metric tag.
+4. **Trace pipeline — complete**
+   - Receive OTLP traces through the OpenTelemetry Collector.
+   - Batch and export traces to Tempo with 24-hour local retention.
+5. **Log pipeline — complete**
+   - Tail service JSON logs with Fluent Bit.
+   - Index them in OpenSearch for tenant, correlation, service, level, trace, and message searches.
+6. **Visualization — complete**
+   - Provision Prometheus, Tempo, and OpenSearch as Grafana data sources.
+   - Provision the Incident Copilot service-overview dashboard.
+7. **Verification — complete**
+   - Test HTTP MDC propagation and cleanup.
+   - Run the full Maven reactor and validate Compose, YAML, JSON, and repository diffs.
+
+### Phase 2 endpoints
+
+| Component | URL | Purpose |
+|---|---|---|
+| Grafana | `http://localhost:3000` | Dashboards and metric/trace/log exploration (`admin` / `incident`) |
+| Prometheus | `http://localhost:9090` | Metrics and target health |
+| Tempo | `http://localhost:3200` | Trace API |
+| OpenSearch | `http://localhost:9200` | Structured log search API |
+| OTLP | `localhost:4317` / `localhost:4318` | gRPC and HTTP trace ingestion |
+
+After `docker compose up --build`, submit the Phase 1 order request and use its
+correlation ID to follow the same transaction through structured logs, service
+metrics, and distributed traces.
+
 ## Planned repository layout
 
 ```text
@@ -321,7 +363,7 @@ As implementation progresses, the repository will add:
 - [x] Define target architecture and portfolio demo
 - [x] Publish the Phase 1 implementation plan
 - [x] Implement the tenant-aware microservice workflow
-- [ ] Add the observability stack
+- [x] Add the observability stack
 - [ ] Add controlled incident simulation
 - [ ] Build the investigation Copilot
 - [ ] Add operational RAG

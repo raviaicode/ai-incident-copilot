@@ -1,0 +1,8 @@
+apiVersion: 1
+providers:
+  - name: Incident Copilot
+    folder: Incident Copilot
+    type: file
+    disableDeletion: true
+    options:
+      path: /var/lib/grafana/dashboards

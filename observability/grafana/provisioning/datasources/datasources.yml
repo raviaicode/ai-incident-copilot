@@ -1,0 +1,28 @@
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    jsonData:
+      tracesToMetrics:
+        datasourceUid: prometheus
+  - name: OpenSearch
+    type: elasticsearch
+    uid: opensearch
+    access: proxy
+    url: http://opensearch:9200
+    editable: false
+    jsonData:
+      index: incident-logs-*
+      timeField: '@timestamp'
+      esVersion: '7.10.0'

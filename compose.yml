@@ -40,6 +40,10 @@ services:
   tenant-service:
     build: { context: ., args: { MODULE: tenant-service } }
     ports: ["8081:8081"]
+    environment:
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      LOG_FILE: /var/log/incident-copilot/tenant-service.json
+    volumes: ["service-logs:/var/log/incident-copilot"]
   order-service:
     build: { context: ., args: { MODULE: order-service } }
     ports: ["8082:8082"]
@@ -47,6 +51,9 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/incidents
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       TENANT_SERVICE_URL: http://tenant-service:8081
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      LOG_FILE: /var/log/incident-copilot/order-service.json
+    volumes: ["service-logs:/var/log/incident-copilot"]
     depends_on:
       postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
@@ -57,6 +64,9 @@ services:
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/incidents
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      LOG_FILE: /var/log/incident-copilot/payment-service.json
+    volumes: ["service-logs:/var/log/incident-copilot"]
     depends_on:
       postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
@@ -66,6 +76,73 @@ services:
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/incidents
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      LOG_FILE: /var/log/incident-copilot/notification-service.json
+    volumes: ["service-logs:/var/log/incident-copilot"]
     depends_on:
       postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=24h"]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9090:9090"]
+    depends_on:
+      - tenant-service
+      - order-service
+      - payment-service
+      - notification-service
+  tempo:
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo.yml"]
+    volumes:
+      - ./observability/tempo/tempo.yml:/etc/tempo.yml:ro
+      - tempo-data:/var/tempo
+    ports: ["3200:3200"]
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    command: ["--config=/etc/otelcol-contrib/config.yml"]
+    volumes:
+      - ./observability/otel/collector.yml:/etc/otelcol-contrib/config.yml:ro
+    ports: ["4317:4317", "4318:4318"]
+    depends_on: [tempo]
+  opensearch:
+    image: opensearchproject/opensearch:2.18.0
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes: ["opensearch-data:/usr/share/opensearch/data"]
+    ports: ["9200:9200"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  fluent-bit:
+    image: fluent/fluent-bit:3.2.1
+    volumes:
+      - service-logs:/logs:ro
+      - ./observability/fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./observability/fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf:ro
+    depends_on:
+      opensearch: { condition: service_healthy }
+  grafana:
+    image: grafana/grafana:11.5.2
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: incident
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["3000:3000"]
+    depends_on: [prometheus, tempo, opensearch]
+
+volumes:
+  service-logs:
+  tempo-data:
+  opensearch-data:
+  grafana-data:
