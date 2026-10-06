@@ -4,7 +4,7 @@ AI Incident Copilot is a portfolio-grade incident investigation platform for a r
 
 The project is intentionally built in phases. Each phase must produce working, testable software and strengthen one polished demo instead of adding disconnected technologies.
 
-> **Current status:** Planning complete for Phase 1. Application code has not been scaffolded yet.
+> **Current status:** Phase 1 foundation implemented; unit verification is available with `mvn test`.
 
 ## The demo we are building toward
 
@@ -135,7 +135,67 @@ POST /orders
 - Invalid tenants and missing context headers receive documented 4xx responses.
 - Unit and integration tests run without depending on manually installed infrastructure.
 
-The detailed task sequence is in the [Phase 1 implementation plan](docs/superpowers/plans/2026-10-05-phase-1-microservice-foundation.md).
+### Phase 1 implementation plan
+
+Phase 1 is delivered as small, independently verifiable slices:
+
+1. **Build foundation — complete**
+   - Create the Java 21 Maven reactor.
+   - Add immutable tenant and event contracts.
+   - Test valid and malformed tenant context.
+2. **Tenant boundary — complete**
+   - Add the tenant service and active-tenant lookup.
+   - Return `404 Not Found` for unknown tenants.
+   - Test known and unknown tenant requests.
+3. **Order workflow — complete**
+   - Validate tenant and correlation headers.
+   - Persist tenant-scoped orders.
+   - Publish `OrderCreated` events and return `202 Accepted`.
+   - Test persistence, event publication, and invalid tenants.
+4. **Payment processing — complete**
+   - Consume `OrderCreated` events.
+   - Persist payments and publish `PaymentProcessed` events.
+   - Enforce idempotency through consumer checks and database uniqueness.
+   - Test context propagation and duplicate delivery.
+5. **Notification processing — complete**
+   - Consume `PaymentProcessed` events.
+   - Persist delivered notifications with tenant and correlation context.
+   - Enforce and test idempotent delivery.
+6. **Local runtime — complete**
+   - Package every service as an executable Spring Boot JAR.
+   - Add PostgreSQL, Redis, Kafka, and all four services to Docker Compose.
+   - Validate the Compose configuration.
+7. **Final verification — complete**
+   - Run the complete Maven test and package lifecycle.
+   - Check repository diffs and document local usage.
+
+Phase 1 is complete when `mvn test` passes without manually running infrastructure,
+`docker compose up --build` starts the complete stack, tenant context survives the
+workflow, cross-tenant repository access is scoped, and duplicate events cannot
+create duplicate payment or notification records.
+
+The standalone [Phase 1 plan](docs/superpowers/plans/2026-10-05-phase-1-microservice-foundation.md)
+is retained as supporting documentation; the README is the primary status source.
+
+### Run Phase 1
+
+Start the complete local stack:
+
+```bash
+docker compose up --build
+```
+
+Create an order after the services are ready:
+
+```bash
+curl -i -X POST http://localhost:8082/orders \
+  -H 'Content-Type: application/json' \
+  -H 'X-Tenant-ID: tenant-217' \
+  -H 'X-Correlation-ID: 86f7b51e-0de3-4a2e-bfa6-3ec8d69d1138' \
+  -d '{"amount": 12.50}'
+```
+
+Run the infrastructure-independent test suite with `mvn test`.
 
 ## Delivery roadmap
 
@@ -260,7 +320,7 @@ As implementation progresses, the repository will add:
 
 - [x] Define target architecture and portfolio demo
 - [x] Publish the Phase 1 implementation plan
-- [ ] Implement the tenant-aware microservice workflow
+- [x] Implement the tenant-aware microservice workflow
 - [ ] Add the observability stack
 - [ ] Add controlled incident simulation
 - [ ] Build the investigation Copilot
