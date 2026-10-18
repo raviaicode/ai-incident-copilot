@@ -1,0 +1,20 @@
+server.port: 8085
+spring:
+  application.name: copilot-api
+  kafka.bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+investigation:
+  sources:
+    opensearch: ${OPENSEARCH_URL:http://localhost:9200}
+    prometheus: ${PROMETHEUS_URL:http://localhost:9090}
+    tempo: ${TEMPO_URL:http://localhost:3200}
+management:
+  endpoints.web.exposure.include: health,info,prometheus
+  endpoint.health.probes.enabled: true
+  metrics.tags.application: ${spring.application.name}
+  tracing.sampling.probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp.tracing.endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+logging:
+  file.name: ${LOG_FILE:logs/copilot-api.json}
+  structured.format:
+    console: ecs
+    file: ecs

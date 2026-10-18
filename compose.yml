@@ -97,6 +97,21 @@ services:
     depends_on:
       payment-service: { condition: service_started }
       notification-service: { condition: service_started }
+  copilot-api:
+    build: { context: ., args: { MODULE: api, MODULE_ROOT: copilot } }
+    ports: ["8085:8085"]
+    environment:
+      OPENSEARCH_URL: http://opensearch:9200
+      PROMETHEUS_URL: http://prometheus:9090
+      TEMPO_URL: http://tempo:3200
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      LOG_FILE: /var/log/incident-copilot/copilot-api.json
+    volumes: ["service-logs:/var/log/incident-copilot"]
+    depends_on:
+      kafka: { condition: service_healthy }
+      opensearch: { condition: service_healthy }
+      tempo: { condition: service_started }
   prometheus:
     image: prom/prometheus:v3.2.1
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=24h"]
@@ -109,6 +124,7 @@ services:
       - payment-service
       - notification-service
       - incident-simulator
+      - copilot-api
   tempo:
     image: grafana/tempo:2.6.1
     command: ["-config.file=/etc/tempo.yml"]

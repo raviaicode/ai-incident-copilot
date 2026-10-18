@@ -1,0 +1,15 @@
+{
+  "tenant-service": [
+    {"version":"1.0.0","deployedAt":"2026-10-01T09:00:00Z","commit":"59ac3b5","environment":"local","status":"SUCCEEDED"}
+  ],
+  "order-service": [
+    {"version":"1.0.0","deployedAt":"2026-10-01T09:05:00Z","commit":"59ac3b5","environment":"local","status":"SUCCEEDED"}
+  ],
+  "payment-service": [
+    {"version":"2.4.1","deployedAt":"2026-10-18T08:00:00Z","commit":"40870f2","environment":"local","status":"SUCCEEDED"},
+    {"version":"2.4.0","deployedAt":"2026-10-01T09:10:00Z","commit":"59ac3b5","environment":"local","status":"SUPERSEDED"}
+  ],
+  "notification-service": [
+    {"version":"1.0.0","deployedAt":"2026-10-01T09:15:00Z","commit":"59ac3b5","environment":"local","status":"SUCCEEDED"}
+  ]
+}

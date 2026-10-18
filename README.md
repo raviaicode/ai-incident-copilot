@@ -4,7 +4,7 @@ AI Incident Copilot is a portfolio-grade incident investigation platform for a r
 
 The project is intentionally built in phases. Each phase must produce working, testable software and strengthen one polished demo instead of adding disconnected technologies.
 
-> **Current status:** Phase 3 controlled incident simulation implemented on top of the observable Phase 2 workflow.
+> **Current status:** Phase 5 investigation lifecycle and evidence correlation implemented on top of the audited Phase 4 tools.
 
 ## The demo we are building toward
 
@@ -314,6 +314,117 @@ The default control token is intended only for local Compose. Set
 `INCIDENT_SIMULATOR_TOKEN` to the same non-default value on the simulator and target
 services outside local development.
 
+## Phase 4 implementation plan: Copilot API and investigation tools
+
+Phase 4 creates the read-only evidence boundary used by the investigation agent:
+
+1. **Copilot API foundation — complete**
+   - Add a Java 21 Spring Boot service at port `8085`.
+   - Publish a machine-readable tool catalog and health/Prometheus endpoints.
+2. **Typed investigation tools — complete**
+   - Search tenant-scoped structured logs without accepting raw OpenSearch DSL.
+   - Execute read-only Prometheus instant queries.
+   - Fetch a trace by validated trace ID from Tempo.
+   - Calculate Kafka consumer lag from committed and current end offsets.
+   - Read service deployment history from a versioned local catalog.
+3. **Audit and safety boundary — complete**
+   - Require a UUID `X-Investigation-ID` for every tool execution.
+   - Return an immutable invocation ID with every evidence result.
+   - Record bounded success/failure audit history and tool-call metrics.
+   - Validate tenant, service, trace, Kafka, time-window, and result-limit inputs.
+4. **Runtime integration — complete**
+   - Add the Copilot API to Docker Compose and the shared structured-log volume.
+   - Connect it to OpenSearch, Prometheus, Tempo, and Kafka through internal URLs.
+   - Add the API to Prometheus service discovery.
+5. **Verification — complete**
+   - Test audit records, source-query construction, validation, and deployment history.
+   - Run the full Maven reactor and validate the Compose model.
+
+### Phase 4 tool endpoints
+
+| Tool | Endpoint | Evidence source |
+|---|---|---|
+| `searchLogs` | `POST /api/tools/logs/search` | OpenSearch |
+| `queryMetrics` | `POST /api/tools/metrics/query` | Prometheus |
+| `getTrace` | `GET /api/tools/traces/{traceId}` | Tempo |
+| `getKafkaConsumerLag` | `GET /api/tools/kafka/consumer-lag` | Kafka Admin API |
+| `getDeploymentHistory` | `GET /api/tools/deployments/{service}` | Versioned local catalog |
+
+List the tool catalog:
+
+```bash
+curl http://localhost:8085/api/tools
+```
+
+Query the payment error metric with an investigation ID:
+
+```bash
+export INVESTIGATION_ID=$(curl -s -X POST http://localhost:8085/api/investigations \
+  -H 'Content-Type: application/json' \
+  -d '{"tenantId":"tenant-217","service":"payment-service","question":"Why are payments failing?"}' \
+  | jq -r '.investigationId')
+curl -X POST http://localhost:8085/api/tools/metrics/query \
+  -H "X-Investigation-ID: $INVESTIGATION_ID" \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"sum(rate(incident_injection_effects_total[5m])) by (tenant, mode)"}'
+```
+
+Query payment consumer lag:
+
+```bash
+curl 'http://localhost:8085/api/tools/kafka/consumer-lag?groupId=payment-service&topic=orders.created' \
+  -H "X-Investigation-ID: $INVESTIGATION_ID"
+```
+
+Review the bounded invocation audit log with
+`curl 'http://localhost:8085/api/tool-invocations?limit=20'`.
+
+## Phase 5 implementation plan: investigation lifecycle and evidence correlation
+
+Phase 5 turns the individual read-only tools into a deterministic investigation
+workflow while keeping conclusions tied to captured evidence:
+
+1. **Investigation state model — complete**
+   - Create and retrieve tenant-scoped investigations.
+   - Enforce `CREATED → COLLECTING_EVIDENCE → ANALYZING` transitions.
+   - Finish as `COMPLETED`, `INSUFFICIENT_EVIDENCE`, or `FAILED`.
+   - Reject invalid transitions with an HTTP `409` response.
+2. **Evidence binding — complete**
+   - Require tool calls to reference an existing investigation.
+   - Attach every successful tool result as immutable evidence with its invocation ID.
+   - Preserve the existing bounded audit history for successful and failed calls.
+3. **Deterministic orchestration — complete**
+   - Collect service-scoped logs, tenant incident metrics, Kafka lag, and deployment history.
+   - Follow a valid trace ID found in logs when one is available.
+   - Continue with partial evidence when an individual source is unavailable.
+4. **Evidence correlation guardrail — complete**
+   - Score known failure hypotheses from explicit evidence markers.
+   - Require a confidence of at least `0.75` and two independent tools before declaring a supported root cause.
+   - Return `INSUFFICIENT_EVIDENCE` when that threshold is not met.
+5. **Verification — complete**
+   - Test state transitions, automatic evidence capture, multi-source orchestration, and the independent-evidence threshold.
+   - Run the complete Maven reactor and exercise the workflow against the Compose stack.
+
+### Run a Phase 5 investigation
+
+Create an investigation and run automatic evidence collection and analysis:
+
+```bash
+export INVESTIGATION_ID=$(curl -s -X POST http://localhost:8085/api/investigations \
+  -H 'Content-Type: application/json' \
+  -d '{"tenantId":"tenant-217","service":"payment-service","question":"Why are payments failing?"}' \
+  | jq -r '.investigationId')
+
+curl -s -X POST "http://localhost:8085/api/investigations/$INVESTIGATION_ID/run" | jq
+```
+
+The response includes the terminal status, captured evidence, ranked hypotheses,
+supporting evidence IDs, confidence scores, and conclusion. Retrieve it later with:
+
+```bash
+curl -s "http://localhost:8085/api/investigations/$INVESTIGATION_ID" | jq
+```
+
 ## Planned repository layout
 
 ```text
@@ -425,7 +536,8 @@ As implementation progresses, the repository will add:
 - [x] Implement the tenant-aware microservice workflow
 - [x] Add the observability stack
 - [x] Add controlled incident simulation
-- [ ] Build the investigation Copilot
+- [x] Build the Copilot API and typed investigation tools
+- [x] Build investigation state and evidence correlation
 - [ ] Add operational RAG
 - [ ] Add multi-tenant impact analysis
 - [ ] Add human-approved remediation and RCA generation

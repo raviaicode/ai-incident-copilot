@@ -10,3 +10,4 @@ scrape_configs:
           - payment-service:8083
           - notification-service:8084
           - incident-simulator:8090
+          - copilot-api:8085
