@@ -66,6 +66,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
       LOG_FILE: /var/log/incident-copilot/payment-service.json
+      INCIDENT_SIMULATOR_TOKEN: ${INCIDENT_SIMULATOR_TOKEN:-local-simulator-token}
     volumes: ["service-logs:/var/log/incident-copilot"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -78,10 +79,24 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
       LOG_FILE: /var/log/incident-copilot/notification-service.json
+      INCIDENT_SIMULATOR_TOKEN: ${INCIDENT_SIMULATOR_TOKEN:-local-simulator-token}
     volumes: ["service-logs:/var/log/incident-copilot"]
     depends_on:
       postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
+  incident-simulator:
+    build: { context: ., args: { MODULE: incident-simulator, MODULE_ROOT: . } }
+    ports: ["8090:8090"]
+    environment:
+      PAYMENT_SERVICE_URL: http://payment-service:8083
+      NOTIFICATION_SERVICE_URL: http://notification-service:8084
+      INCIDENT_SIMULATOR_TOKEN: ${INCIDENT_SIMULATOR_TOKEN:-local-simulator-token}
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      LOG_FILE: /var/log/incident-copilot/incident-simulator.json
+    volumes: ["service-logs:/var/log/incident-copilot"]
+    depends_on:
+      payment-service: { condition: service_started }
+      notification-service: { condition: service_started }
   prometheus:
     image: prom/prometheus:v3.2.1
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=24h"]
@@ -93,6 +108,7 @@ services:
       - order-service
       - payment-service
       - notification-service
+      - incident-simulator
   tempo:
     image: grafana/tempo:2.6.1
     command: ["-config.file=/etc/tempo.yml"]

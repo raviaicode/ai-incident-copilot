@@ -9,3 +9,4 @@ scrape_configs:
           - order-service:8082
           - payment-service:8083
           - notification-service:8084
+          - incident-simulator:8090

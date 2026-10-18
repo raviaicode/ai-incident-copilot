@@ -30,3 +30,8 @@ logging:
   structured.format:
     console: ecs
     file: ecs
+incident:
+  injection:
+    enabled: true
+    token: ${INCIDENT_SIMULATOR_TOKEN:local-simulator-token}
+    allowed: DB_POOL_EXHAUSTION,KAFKA_CONSUMER_LAG

@@ -4,7 +4,7 @@ AI Incident Copilot is a portfolio-grade incident investigation platform for a r
 
 The project is intentionally built in phases. Each phase must produce working, testable software and strengthen one polished demo instead of adding disconnected technologies.
 
-> **Current status:** Phase 2 observability implemented on top of the tested Phase 1 workflow.
+> **Current status:** Phase 3 controlled incident simulation implemented on top of the observable Phase 2 workflow.
 
 ## The demo we are building toward
 
@@ -254,6 +254,66 @@ After `docker compose up --build`, submit the Phase 1 order request and use its
 correlation ID to follow the same transaction through structured logs, service
 metrics, and distributed traces.
 
+## Phase 3 implementation plan: controlled incident simulation
+
+Phase 3 adds deterministic failures to the real event workflow while keeping their
+scope, duration, and recovery bounded:
+
+1. **Shared incident controls — complete**
+   - Add token-protected internal activation and recovery endpoints.
+   - Allowlist incident modes per service and reject invalid tenants, intensity, or durations over 15 minutes.
+   - Automatically expire active injections and expose activation/effect metrics.
+2. **First three scenarios — complete**
+   - Fail payment database work for one tenant to emulate pool exhaustion.
+   - Delay payment Kafka consumption for one tenant to produce controlled consumer lag.
+   - Fail notification delivery for one tenant without affecting payment processing.
+3. **Simulator API — complete**
+   - Publish a scenario catalog at `GET /scenarios`.
+   - Activate scenarios with `POST /scenarios/{scenarioId}/activate`.
+   - List audit records at `GET /incidents` and recover with `DELETE /incidents/{incidentId}`.
+4. **Observability and runtime — complete**
+   - Emit structured incident logs with tenant and correlation context from affected handlers.
+   - Export simulator and injection metrics to Prometheus.
+   - Run the simulator at port `8090` in Docker Compose.
+5. **Verification — complete**
+   - Unit test safety limits, tenant scoping, each injected effect, and explicit recovery.
+   - Validate the complete Maven reactor and Docker Compose model.
+
+### Phase 3 scenarios
+
+| Scenario ID | Target | Default intensity | Expected evidence |
+|---|---|---:|---|
+| `payment-db-pool-exhaustion` | payment-service | 100% failure | Payment handler errors, retries, injection effect counter |
+| `payment-kafka-consumer-lag` | payment-service | 5000 ms/event | Increased processing time and consumer lag |
+| `notification-delivery-failure` | notification-service | 100% failure | Healthy payments with notification handler errors and retries |
+
+### Run Phase 3
+
+List available scenarios:
+
+```bash
+curl http://localhost:8090/scenarios
+```
+
+Activate a two-minute, tenant-scoped payment failure:
+
+```bash
+curl -X POST http://localhost:8090/scenarios/payment-db-pool-exhaustion/activate \
+  -H 'Content-Type: application/json' \
+  -d '{"tenantId":"tenant-217","durationSeconds":120}'
+```
+
+The response contains an `incidentId`. Submit an order for `tenant-217`, inspect
+payment logs and Prometheus, then recover immediately instead of waiting for expiry:
+
+```bash
+curl -X DELETE http://localhost:8090/incidents/<incidentId>
+```
+
+The default control token is intended only for local Compose. Set
+`INCIDENT_SIMULATOR_TOKEN` to the same non-default value on the simulator and target
+services outside local development.
+
 ## Planned repository layout
 
 ```text
@@ -364,7 +424,7 @@ As implementation progresses, the repository will add:
 - [x] Publish the Phase 1 implementation plan
 - [x] Implement the tenant-aware microservice workflow
 - [x] Add the observability stack
-- [ ] Add controlled incident simulation
+- [x] Add controlled incident simulation
 - [ ] Build the investigation Copilot
 - [ ] Add operational RAG
 - [ ] Add multi-tenant impact analysis

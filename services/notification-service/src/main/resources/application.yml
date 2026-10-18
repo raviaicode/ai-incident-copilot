@@ -26,3 +26,8 @@ logging:
   structured.format:
     console: ecs
     file: ecs
+incident:
+  injection:
+    enabled: true
+    token: ${INCIDENT_SIMULATOR_TOKEN:local-simulator-token}
+    allowed: NOTIFICATION_DELIVERY_FAILURE
